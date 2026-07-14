@@ -3,6 +3,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const twilio = require('twilio');
 const cron = require('node-cron');
+const axios = require('axios');
 
 const { CARPETAS, guardarItem, listarPendientes, marcarHecho } = require('./db');
 const { clasificarMensaje } = require('./clasificador');
@@ -11,8 +12,8 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM; // ej: whatsapp:+14155238886
-const MI_WHATSAPP = process.env.MI_WHATSAPP; // ej: whatsapp:+56912345678
+const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
+const MI_WHATSAPP = process.env.MI_WHATSAPP;
 
 const NOMBRES_CARPETA = {
   ideas: '💡 Ideas',
@@ -42,6 +43,30 @@ function formatearLista(items) {
   return texto.trim();
 }
 
+async function transcribirNotaDeVoz(mediaUrl) {
+  const audioResponse = await axios.get(mediaUrl, {
+    responseType: 'arraybuffer',
+    auth: {
+      username: process.env.TWILIO_ACCOUNT_SID,
+      password: process.env.TWILIO_AUTH_TOKEN
+    }
+  });
+
+  const dgResponse = await axios.post(
+    'https://api.deepgram.com/v1/listen?language=es&smart_format=true',
+    audioResponse.data,
+    {
+      headers: {
+        Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/ogg'
+      }
+    }
+  );
+
+  const transcript = dgResponse.data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+  return transcript.trim();
+}
+
 async function enviarWhatsApp(mensaje) {
   await client.messages.create({
     from: TWILIO_WHATSAPP_FROM,
@@ -50,20 +75,28 @@ async function enviarWhatsApp(mensaje) {
   });
 }
 
-// Webhook: recibe mensajes desde WhatsApp
 app.post('/whatsapp', async (req, res) => {
-  const textoOriginal = (req.body.Body || '').trim();
+  let textoOriginal = (req.body.Body || '').trim();
   const respuesta = new twilio.twiml.MessagingResponse();
+  const numMedia = parseInt(req.body.NumMedia || '0', 10);
+  const tipoMedia = req.body.MediaContentType0 || '';
 
   try {
+    if (numMedia > 0 && tipoMedia.startsWith('audio')) {
+      textoOriginal = await transcribirNotaDeVoz(req.body.MediaUrl0);
+      if (!textoOriginal) {
+        respuesta.message('No pude entender la nota de voz, intenta de nuevo o escribe el mensaje.');
+        res.type('text/xml').send(respuesta.toString());
+        return;
+      }
+    }
+
     const textoLower = textoOriginal.toLowerCase();
 
-    // Comando: ver lista completa
     if (textoLower === 'lista' || textoLower === 'pendientes') {
       const items = listarPendientes();
       respuesta.message(formatearLista(items));
 
-    // Comando: ver una carpeta específica -> "lista ideas"
     } else if (textoLower.startsWith('lista ')) {
       const carpeta = textoLower.replace('lista ', '').trim();
       if (CARPETAS.includes(carpeta)) {
@@ -73,17 +106,16 @@ app.post('/whatsapp', async (req, res) => {
         respuesta.message(`Carpeta no reconocida. Usa una de: ${CARPETAS.join(', ')}`);
       }
 
-    // Comando: marcar como hecho -> "hecho 5"
     } else if (textoLower.startsWith('hecho ')) {
       const id = parseInt(textoLower.replace('hecho ', '').trim(), 10);
       const ok = marcarHecho(id);
       respuesta.message(ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`);
 
-    // Cualquier otro mensaje: clasificar y guardar
     } else if (textoOriginal.length > 0) {
       const { carpeta, contenido } = await clasificarMensaje(textoOriginal);
       const id = guardarItem(carpeta, contenido);
-      respuesta.message(`Guardado en ${NOMBRES_CARPETA[carpeta]} (#${id})`);
+      const prefijo = numMedia > 0 ? `🎙️ "${textoOriginal}"\n` : '';
+      respuesta.message(`${prefijo}Guardado en ${NOMBRES_CARPETA[carpeta]} (#${id})`);
     }
   } catch (err) {
     console.error(err);
@@ -93,7 +125,6 @@ app.post('/whatsapp', async (req, res) => {
   res.type('text/xml').send(respuesta.toString());
 });
 
-// Recordatorios automáticos: 8:00 AM y 3:30 PM (hora de Santiago)
 cron.schedule('0 8 * * *', async () => {
   const items = listarPendientes();
   await enviarWhatsApp(`☀️ Buenos días. Tus pendientes:\n\n${formatearLista(items)}`);
