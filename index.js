@@ -4,39 +4,42 @@ const bodyParser = require('body-parser');
 const twilio = require('twilio');
 const cron = require('node-cron');
 const axios = require('axios');
+const path = require('path');
 
-const { CARPETAS, guardarItem, listarPendientes, marcarHecho } = require('./db');
+const {
+  listarCarpetas, crearCarpeta, eliminarCarpeta,
+  guardarItem, listarPendientes, listarTodos,
+  marcarHecho, alternarHecho, eliminarItem, getConfig, setConfig
+} = require('./db');
 const { clasificarMensaje } = require('./clasificador');
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.json());
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
 const MI_WHATSAPP = process.env.MI_WHATSAPP;
 
-const NOMBRES_CARPETA = {
-  ideas: '💡 Ideas',
-  recordatorios: '⏰ Recordatorios',
-  reuniones: '📅 Reuniones',
-  llamadas: '📞 Llamadas',
-  reparaciones_urgentes: '🚨 Reparaciones urgentes',
-  reparaciones_generales: '🔧 Reparaciones generales',
-  vehiculo: '🚗 Vehículo'
-};
+function nombreConEmoji(carpetaClave) {
+  const carpetas = listarCarpetas();
+  const c = carpetas.find(c => c.clave === carpetaClave);
+  return c ? `${c.emoji} ${c.nombre}` : carpetaClave;
+}
 
 function formatearLista(items) {
   if (items.length === 0) return 'No tienes pendientes. 🎉';
+  const carpetas = listarCarpetas();
   const porCarpeta = {};
   for (const item of items) {
     if (!porCarpeta[item.carpeta]) porCarpeta[item.carpeta] = [];
     porCarpeta[item.carpeta].push(item);
   }
   let texto = '';
-  for (const carpeta of CARPETAS) {
-    if (!porCarpeta[carpeta]) continue;
-    texto += `\n${NOMBRES_CARPETA[carpeta]}\n`;
-    for (const item of porCarpeta[carpeta]) {
+  for (const carpeta of carpetas) {
+    if (!porCarpeta[carpeta.clave]) continue;
+    texto += `\n${carpeta.emoji} ${carpeta.nombre}\n`;
+    for (const item of porCarpeta[carpeta.clave]) {
       texto += `  #${item.id} ${item.contenido}\n`;
     }
   }
@@ -77,7 +80,6 @@ async function enviarWhatsApp(mensaje) {
 
 app.post('/whatsapp', async (req, res) => {
   let textoOriginal = (req.body.Body || '').trim();
-  console.log('MENSAJE RECIBIDO:', JSON.stringify(req.body));
   const respuesta = new twilio.twiml.MessagingResponse();
   const numMedia = parseInt(req.body.NumMedia || '0', 10);
   const tipoMedia = req.body.MediaContentType0 || '';
@@ -93,6 +95,8 @@ app.post('/whatsapp', async (req, res) => {
     }
 
     const textoLower = textoOriginal.toLowerCase();
+    const carpetasActuales = listarCarpetas();
+    const clavesValidas = carpetasActuales.map(c => c.clave);
 
     if (textoLower === 'lista' || textoLower === 'pendientes') {
       const items = listarPendientes();
@@ -100,11 +104,11 @@ app.post('/whatsapp', async (req, res) => {
 
     } else if (textoLower.startsWith('lista ')) {
       const carpeta = textoLower.replace('lista ', '').trim();
-      if (CARPETAS.includes(carpeta)) {
+      if (clavesValidas.includes(carpeta)) {
         const items = listarPendientes(carpeta);
         respuesta.message(formatearLista(items));
       } else {
-        respuesta.message(`Carpeta no reconocida. Usa una de: ${CARPETAS.join(', ')}`);
+        respuesta.message(`Carpeta no reconocida. Usa una de: ${clavesValidas.join(', ')}`);
       }
 
     } else if (textoLower.startsWith('hecho ')) {
@@ -112,30 +116,101 @@ app.post('/whatsapp', async (req, res) => {
       const ok = marcarHecho(id);
       respuesta.message(ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`);
 
+    } else if (textoLower.startsWith('crear carpeta ') || textoLower.startsWith('nueva carpeta ') || textoLower.startsWith('créame la carpeta ') || textoLower.startsWith('creame la carpeta ')) {
+      const nombre = textoOriginal.replace(/^(crear carpeta|nueva carpeta|créame la carpeta|creame la carpeta)\s*/i, '').trim();
+      if (nombre) {
+        const clave = crearCarpeta(nombre);
+        respuesta.message(`📁 Carpeta creada: "${nombre}". Ya puedes guardar cosas ahí mencionando su nombre.`);
+      } else {
+        respuesta.message('Dime el nombre así: "crear carpeta jardín"');
+      }
+
     } else if (textoOriginal.length > 0) {
       const { carpeta, contenido } = await clasificarMensaje(textoOriginal);
       const id = guardarItem(carpeta, contenido);
       const prefijo = numMedia > 0 ? `🎙️ "${textoOriginal}"\n` : '';
-      respuesta.message(`${prefijo}Guardado en ${NOMBRES_CARPETA[carpeta]} (#${id})`);
+      respuesta.message(`${prefijo}Guardado en ${nombreConEmoji(carpeta)} (#${id})`);
     }
   } catch (err) {
     console.error('ERROR:', err);
     respuesta.message('Ocurrió un error procesando tu mensaje.');
   }
 
-  console.log('RESPUESTA ENVIADA:', respuesta.toString());
   res.type('text/xml').send(respuesta.toString());
 });
 
-cron.schedule('0 8 * * *', async () => {
-  const items = listarPendientes();
-  await enviarWhatsApp(`☀️ Buenos días. Tus pendientes:\n\n${formatearLista(items)}`);
-}, { timezone: 'America/Santiago' });
+function requiereContrasena(req, res, next) {
+  const auth = { login: 'admin', password: process.env.DASHBOARD_PASSWORD || 'cambiame' };
+  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+  if (login === auth.login && password === auth.password) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Mi Asistente"');
+  res.status(401).send('Acceso restringido.');
+}
 
-cron.schedule('30 15 * * *', async () => {
-  const items = listarPendientes();
-  await enviarWhatsApp(`🕒 Recordatorio de media tarde:\n\n${formatearLista(items)}`);
-}, { timezone: 'America/Santiago' });
+app.use('/dashboard', requiereContrasena, express.static(path.join(__dirname, 'public')));
+app.get('/dashboard', requiereContrasena, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+app.get('/api/items', requiereContrasena, (req, res) => {
+  res.json(listarTodos());
+});
+
+app.post('/api/items/:id/toggle', requiereContrasena, (req, res) => {
+  const nuevoEstado = alternarHecho(req.params.id);
+  res.json({ ok: nuevoEstado !== null, hecho: nuevoEstado });
+});
+
+app.delete('/api/items/:id', requiereContrasena, (req, res) => {
+  const ok = eliminarItem(req.params.id);
+  res.json({ ok });
+});
+
+app.get('/api/carpetas', requiereContrasena, (req, res) => {
+  res.json(listarCarpetas());
+});
+
+app.post('/api/carpetas', requiereContrasena, (req, res) => {
+  const { nombre, emoji } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ ok: false, error: 'Falta el nombre' });
+  const clave = crearCarpeta(nombre.trim(), emoji || '📁');
+  res.json({ ok: true, clave });
+});
+
+app.delete('/api/carpetas/:clave', requiereContrasena, (req, res) => {
+  const ok = eliminarCarpeta(req.params.clave);
+  res.json({ ok });
+});
+
+app.get('/api/config', requiereContrasena, (req, res) => {
+  res.json({
+    hora_manana: getConfig('hora_manana', '08:00'),
+    hora_tarde: getConfig('hora_tarde', '15:30'),
+    recordatorios_activos: getConfig('recordatorios_activos', 'true')
+  });
+});
+
+app.post('/api/config', requiereContrasena, (req, res) => {
+  const { hora_manana, hora_tarde, recordatorios_activos } = req.body;
+  if (hora_manana) setConfig('hora_manana', hora_manana);
+  if (hora_tarde) setConfig('hora_tarde', hora_tarde);
+  setConfig('recordatorios_activos', recordatorios_activos ? 'true' : 'false');
+  reprogramarRecordatorios();
+  res.json({ ok: true });
+});
+
+let tareaManana = null;
+let tareaTarde = null;
+
+function reprogramarRecordatorios() {
+  if (tareaManana) tareaManana.stop();
+  if (tareaTarde) tareaTarde.stop();
+
+  const activos = getConfig('recordatorios_activos', 'true') === 'true';
+  if (!activos) return;
+
+  const [hM, mM] = getConfig('hora_manana', '08:00').split(':');
+  const [hT, mT] = getConfig('hora_tarde', '15:30').split(':');
+
+  tareaManana = cron.schedule(`${mM} ${hM} * * *`,
