@@ -119,10 +119,11 @@ app.post('/whatsapp', async (req, res) => {
       respuesta.message(`${prefijo}Guardado en ${NOMBRES_CARPETA[carpeta]} (#${id})`);
     }
   } catch (err) {
-    console.error(err);
+    console.error('ERROR:', err);
     respuesta.message('Ocurrió un error procesando tu mensaje.');
   }
 
+  console.log('RESPUESTA ENVIADA:', respuesta.toString());
   res.type('text/xml').send(respuesta.toString());
 });
 
