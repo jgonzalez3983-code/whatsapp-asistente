@@ -1,6 +1,6 @@
-const { CARPETAS } = require('./db');
+const { listarCarpetas } = require('./db');
 
-const REGLAS = [
+const REGLAS_FIJAS = [
   {
     carpeta: 'reparaciones_urgentes',
     peso: 3,
@@ -47,12 +47,26 @@ function normalizar(texto) {
   return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function reglasParaCarpetasPersonalizadas() {
+  const clavesFijas = new Set(REGLAS_FIJAS.map(r => r.carpeta));
+  const carpetas = listarCarpetas();
+  return carpetas
+    .filter(c => !clavesFijas.has(c.clave))
+    .map(c => ({
+      carpeta: c.clave,
+      peso: 2,
+      palabras: [c.nombre]
+    }));
+}
+
 async function clasificarMensaje(texto) {
   const textoNorm = normalizar(texto);
+  const reglas = [...REGLAS_FIJAS, ...reglasParaCarpetasPersonalizadas()];
+
   let mejorCarpeta = null;
   let mejorPuntaje = 0;
 
-  for (const regla of REGLAS) {
+  for (const regla of reglas) {
     let puntaje = 0;
     for (const palabra of regla.palabras) {
       if (textoNorm.includes(normalizar(palabra))) {
