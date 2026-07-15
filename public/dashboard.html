@@ -30,6 +30,8 @@
     min-height: 100vh;
   }
   .layout { display: flex; min-height: 100vh; }
+
+  /* ---- Sidebar (solo desktop) ---- */
   .sidebar {
     width: 230px; background: var(--panel); border-right: 1px solid var(--borde);
     padding: 20px 14px; flex-shrink: 0;
@@ -46,10 +48,17 @@
   .carpeta-nav.activa { background: rgba(163,116,255,0.12); border-color: rgba(163,116,255,0.4); color: var(--texto); }
   .carpeta-nav .contador { margin-left: auto; font-size: 11px; background: var(--panel-2); border: 1px solid var(--borde); padding: 1px 7px; border-radius: 10px; color: var(--texto-sec); }
   .carpeta-nav.boton-agregar { color: var(--morado); border: 1px dashed var(--borde); }
+  .btn-editar-carpeta { margin-left: auto; opacity: 0.6; font-size: 12px; padding: 2px 4px; }
+  .carpeta-nav .contador + .btn-editar-carpeta { margin-left: 4px; }
+  .chip .btn-editar-carpeta { margin-left: 2px; opacity: 0.7; }
   .sidebar-sep { height: 1px; background: var(--borde); margin: 14px 0; }
+
+  /* ---- Main ---- */
   .main { flex: 1; padding: 22px 24px 100px; max-width: 900px; }
   h1 { font-size: 21px; margin: 0 0 2px; }
   .subtitulo { color: var(--texto-sec); font-size: 13px; margin-bottom: 18px; }
+
+  /* ---- Carpetas chips (solo mobile) ---- */
   .carpetas-scroll {
     display: none; gap: 8px; overflow-x: auto; padding: 2px 0 14px;
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
@@ -63,6 +72,8 @@
   .chip.activa { background: rgba(163,116,255,0.15); border-color: var(--morado); color: var(--texto); }
   .chip .contador { font-size: 11px; background: var(--panel-2); border: 1px solid var(--borde); padding: 0 6px; border-radius: 10px; color: var(--texto-sec); }
   .chip.boton-agregar { color: var(--morado); border-style: dashed; }
+
+  /* ---- Semana ---- */
   .semana { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 20px; }
   .dia {
     background: var(--panel); border: 1px solid var(--borde); border-radius: 12px;
@@ -74,12 +85,16 @@
   .dia-num { font-size: 16px; font-weight: 700; margin: 2px 0; }
   .dia-puntos { display: flex; justify-content: center; gap: 3px; height: 6px; }
   .dia-punto { width: 5px; height: 5px; border-radius: 50%; background: var(--morado); }
+
+  /* ---- Tabs ---- */
   .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
   .tab {
     flex: 1; text-align: center; padding: 9px; border-radius: 12px; cursor: pointer;
     font-size: 13.5px; font-weight: 600; background: var(--panel); color: var(--texto-sec); border: 1px solid var(--borde);
   }
   .tab.activo { background: linear-gradient(135deg, var(--morado-fuerte), var(--celeste)); color: #0b0b12; border-color: transparent; }
+
+  /* ---- Items ---- */
   .carpeta-grupo { margin-bottom: 20px; }
   .carpeta-titulo { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; color: var(--texto-sec); text-transform: uppercase; letter-spacing: .03em; }
   .item {
@@ -98,6 +113,8 @@
   .item-texto { flex: 1; font-size: 14.5px; line-height: 1.35; }
   .btn-eliminar { border: none; background: none; color: var(--texto-sec); font-size: 17px; cursor: pointer; padding: 6px 8px; border-radius: 8px; flex-shrink: 0; }
   .vacio { color: var(--texto-sec); text-align: center; padding: 60px 20px; font-size: 14px; }
+
+  /* ---- Config ---- */
   .config-grupo { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
   .config-grupo label { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 10px; }
   .config-grupo input[type=time], .config-grupo input[type=text] {
@@ -117,6 +134,8 @@
     font-size: 15px; font-weight: 700; width: 100%; cursor: pointer; margin-top: 4px;
   }
   #mensaje-guardado { text-align: center; color: var(--verde); font-size: 13.5px; margin-top: 10px; display: none; }
+
+  /* ---- Modal nueva carpeta ---- */
   .modal-fondo {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
     align-items: center; justify-content: center; z-index: 50; padding: 20px;
@@ -138,6 +157,33 @@
     flex: 1; padding: 11px; border-radius: 10px; border: none; cursor: pointer; font-size: 14px; font-weight: 700;
     background: linear-gradient(135deg, var(--morado-fuerte), var(--celeste)); color: #0b0b12;
   }
+
+  .fab {
+    position: fixed; right: 20px; bottom: 90px; width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--morado-fuerte), var(--celeste)); border: none;
+    color: #0b0b12; font-size: 26px; font-weight: 700; cursor: pointer; z-index: 40;
+    box-shadow: 0 4px 16px rgba(163,116,255,0.4); display: flex; align-items: center; justify-content: center;
+  }
+  @media (min-width: 721px) { .fab { bottom: 24px; } }
+
+  .modal-fila-texto { display: flex; gap: 8px; align-items: center; }
+  .modal-fila-texto textarea {
+    flex: 1; font-size: 15px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--borde);
+    background: var(--panel-2); color: var(--texto); resize: none; min-height: 44px; font-family: inherit;
+  }
+  .btn-mic {
+    width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--borde); background: var(--panel-2);
+    color: var(--texto-sec); font-size: 18px; cursor: pointer; flex-shrink: 0;
+  }
+  .btn-mic.grabando { background: var(--rojo); color: white; border-color: var(--rojo); animation: pulso 1s infinite; }
+  @keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .modal select {
+    font-size: 15px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--borde);
+    width: 100%; background: var(--panel-2); color: var(--texto); margin-bottom: 12px;
+  }
+  .modal-label { font-size: 12px; color: var(--texto-sec); margin-bottom: 6px; display: block; }
+
+  /* ---- Bottom nav (solo mobile) ---- */
   .bottom-nav {
     display: none; position: fixed; bottom: 0; left: 0; right: 0;
     background: var(--panel); border-top: 1px solid var(--borde);
@@ -146,6 +192,8 @@
   .nav-btn { flex: 1; text-align: center; padding: 8px 4px; border-radius: 12px; font-size: 11px; color: var(--texto-sec); cursor: pointer; }
   .nav-btn .icono { font-size: 20px; display:block; margin-bottom: 2px; }
   .nav-btn.activo { color: var(--morado); }
+
+  /* ---- Responsive ---- */
   @media (max-width: 720px) {
     .sidebar { display: none; }
     .main { padding: 16px 16px 100px; }
@@ -210,6 +258,8 @@
   </div>
 </div>
 
+<button class="fab" onclick="abrirModalTarea()" aria-label="Nuevo pendiente">+</button>
+
 <div class="bottom-nav">
   <div style="display:flex; width:100%">
     <div class="nav-btn activo" data-vista="items" onclick="irAVista('items')"><span class="icono">📋</span>Pendientes</div>
@@ -217,17 +267,37 @@
   </div>
 </div>
 
+<div class="modal-fondo" id="modal-tarea">
+  <div class="modal">
+    <h3>Nuevo pendiente</h3>
+    <label class="modal-label">Carpeta</label>
+    <select id="tarea-carpeta"></select>
+    <label class="modal-label">Día</label>
+    <input type="date" id="tarea-fecha" style="margin-bottom:12px">
+    <label class="modal-label">¿Qué necesitas hacer?</label>
+    <div class="modal-fila-texto" style="margin-bottom:14px">
+      <textarea id="tarea-texto" placeholder="Escribe o dicta por voz..."></textarea>
+      <button type="button" class="btn-mic" id="btn-mic" onclick="alternarDictado()">🎤</button>
+    </div>
+    <div class="modal-botones">
+      <button class="btn-secundario" onclick="cerrarModalTarea()">Cancelar</button>
+      <button class="btn-primario" onclick="crearTareaNueva()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-fondo" id="modal-carpeta">
   <div class="modal">
-    <h3>Nueva carpeta</h3>
+    <h3 id="modal-carpeta-titulo">Nueva carpeta</h3>
     <div class="modal-fila">
       <input type="text" id="nueva-carpeta-emoji" placeholder="📁" maxlength="4">
       <input type="text" id="nueva-carpeta-nombre" placeholder="Nombre de la carpeta">
     </div>
     <div class="modal-botones">
       <button class="btn-secundario" onclick="cerrarModalCarpeta()">Cancelar</button>
-      <button class="btn-primario" onclick="crearCarpetaNueva()">Crear</button>
+      <button class="btn-primario" id="modal-carpeta-boton" onclick="guardarCarpeta()">Crear</button>
     </div>
+    <button class="btn-secundario" id="modal-carpeta-eliminar" style="display:none; width:100%; margin-top:8px; color: var(--rojo); border-color: var(--rojo);" onclick="eliminarCarpetaActual()">Eliminar carpeta</button>
   </div>
 </div>
 
@@ -273,6 +343,7 @@ function renderizarSidebar() {
     html += `
       <div class="carpeta-nav ${carpetaActual === c.clave ? 'activa' : ''}" data-carpeta="${c.clave}" onclick="filtrarCarpeta('${c.clave}')">
         <span>${c.emoji}</span><span>${escapeHtml(c.nombre)}</span><span class="contador" id="sc-${c.clave}">0</span>
+        <span class="btn-editar-carpeta" onclick="event.stopPropagation(); abrirModalCarpeta('${c.clave}')">✏️</span>
       </div>`;
   }
   document.getElementById('sidebar-carpetas').innerHTML = html;
@@ -285,6 +356,7 @@ function renderizarChips() {
     html += `
       <div class="chip ${carpetaActual === c.clave ? 'activa' : ''}" onclick="filtrarCarpeta('${c.clave}')">
         <span>${c.emoji} ${escapeHtml(c.nombre)}</span><span class="contador" id="chip-${c.clave}">0</span>
+        <span class="btn-editar-carpeta" onclick="event.stopPropagation(); abrirModalCarpeta('${c.clave}')">✏️</span>
       </div>`;
   }
   html += `<div class="chip boton-agregar" onclick="abrirModalCarpeta()"><span>➕ Nueva</span></div>`;
@@ -389,23 +461,132 @@ async function eliminarItem(id) {
   cargarItems();
 }
 
-function abrirModalCarpeta() {
-  document.getElementById('nueva-carpeta-emoji').value = '';
-  document.getElementById('nueva-carpeta-nombre').value = '';
+function abrirModalTarea() {
+  const selectCarpeta = document.getElementById('tarea-carpeta');
+  selectCarpeta.innerHTML = todasLasCarpetas.map(c => `<option value="${c.clave}">${c.emoji} ${escapeHtml(c.nombre)}</option>`).join('');
+  if (carpetaActual) selectCarpeta.value = carpetaActual;
+
+  const inputFecha = document.getElementById('tarea-fecha');
+  inputFecha.value = diaActual || new Date().toISOString().slice(0, 10);
+
+  document.getElementById('tarea-texto').value = '';
+  document.getElementById('modal-tarea').classList.add('abierto');
+}
+
+function cerrarModalTarea() {
+  document.getElementById('modal-tarea').classList.remove('abierto');
+  detenerDictado();
+}
+
+async function crearTareaNueva() {
+  const carpeta = document.getElementById('tarea-carpeta').value;
+  const contenido = document.getElementById('tarea-texto').value.trim();
+  const fecha = document.getElementById('tarea-fecha').value;
+  if (!contenido) return;
+
+  await fetch('/api/items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ carpeta, contenido, fecha })
+  });
+  cerrarModalTarea();
+  cargarItems();
+}
+
+// ---- Dictado por voz (reconocimiento del navegador) ----
+let reconocimiento = null;
+let dictando = false;
+
+function alternarDictado() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Tu navegador no soporta dictado por voz. Prueba desde Chrome.');
+    return;
+  }
+  if (dictando) {
+    detenerDictado();
+    return;
+  }
+  reconocimiento = new SpeechRecognition();
+  reconocimiento.lang = 'es-ES';
+  reconocimiento.interimResults = false;
+  reconocimiento.maxAlternatives = 1;
+
+  reconocimiento.onresult = (evento) => {
+    const texto = evento.results[0][0].transcript;
+    const campo = document.getElementById('tarea-texto');
+    campo.value = (campo.value ? campo.value + ' ' : '') + texto;
+  };
+  reconocimiento.onend = () => detenerDictado();
+  reconocimiento.onerror = () => detenerDictado();
+
+  reconocimiento.start();
+  dictando = true;
+  document.getElementById('btn-mic').classList.add('grabando');
+}
+
+function detenerDictado() {
+  if (reconocimiento) reconocimiento.stop();
+  dictando = false;
+  const btn = document.getElementById('btn-mic');
+  if (btn) btn.classList.remove('grabando');
+}
+
+let carpetaEditando = null;
+
+function abrirModalCarpeta(clave) {
+  carpetaEditando = clave || null;
+  const titulo = document.getElementById('modal-carpeta-titulo');
+  const boton = document.getElementById('modal-carpeta-boton');
+  const btnEliminar = document.getElementById('modal-carpeta-eliminar');
+
+  if (carpetaEditando) {
+    const c = todasLasCarpetas.find(c => c.clave === carpetaEditando);
+    document.getElementById('nueva-carpeta-emoji').value = c ? c.emoji : '';
+    document.getElementById('nueva-carpeta-nombre').value = c ? c.nombre : '';
+    titulo.textContent = 'Editar carpeta';
+    boton.textContent = 'Guardar cambios';
+    btnEliminar.style.display = 'block';
+  } else {
+    document.getElementById('nueva-carpeta-emoji').value = '';
+    document.getElementById('nueva-carpeta-nombre').value = '';
+    titulo.textContent = 'Nueva carpeta';
+    boton.textContent = 'Crear';
+    btnEliminar.style.display = 'none';
+  }
   document.getElementById('modal-carpeta').classList.add('abierto');
 }
 function cerrarModalCarpeta() {
   document.getElementById('modal-carpeta').classList.remove('abierto');
+  carpetaEditando = null;
 }
-async function crearCarpetaNueva() {
+async function guardarCarpeta() {
   const nombre = document.getElementById('nueva-carpeta-nombre').value.trim();
   const emoji = document.getElementById('nueva-carpeta-emoji').value.trim() || '📁';
   if (!nombre) return;
-  await fetch('/api/carpetas', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, emoji })
-  });
+
+  if (carpetaEditando) {
+    await fetch(`/api/carpetas/${carpetaEditando}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, emoji })
+    });
+  } else {
+    await fetch('/api/carpetas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, emoji })
+    });
+  }
+  cerrarModalCarpeta();
+  await cargarCarpetas();
+  cargarItems();
+}
+
+async function eliminarCarpetaActual() {
+  if (!carpetaEditando) return;
+  if (!confirm('¿Eliminar esta carpeta? Los pendientes que tenga quedarán sin carpeta asignada.')) return;
+  await fetch(`/api/carpetas/${carpetaEditando}`, { method: 'DELETE' });
   cerrarModalCarpeta();
   await cargarCarpetas();
   cargarItems();
