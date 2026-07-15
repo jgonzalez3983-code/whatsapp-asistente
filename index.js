@@ -7,9 +7,9 @@ const axios = require('axios');
 const path = require('path');
 
 const {
-  listarCarpetas, crearCarpeta, eliminarCarpeta,
+  listarCarpetas, crearCarpeta, editarCarpeta, eliminarCarpeta,
   guardarItem, listarPendientes, listarTodos,
-  marcarHecho, alternarHecho, eliminarItem, getConfig, setConfig
+  marcarHecho, alternarHecho, eliminarItem, getConfig, setConfig, rodarPendientesVencidos
 } = require('./db');
 const { clasificarMensaje } = require('./clasificador');
 
@@ -157,6 +157,16 @@ app.get('/api/items', requiereContrasena, (req, res) => {
   res.json(listarTodos());
 });
 
+app.post('/api/items', requiereContrasena, (req, res) => {
+  const { carpeta, contenido, fecha } = req.body;
+  if (!carpeta || !contenido || !contenido.trim()) {
+    return res.status(400).json({ ok: false, error: 'Falta carpeta o contenido' });
+  }
+  const fechaCompleta = fecha ? `${fecha} 12:00:00` : null;
+  const id = guardarItem(carpeta, contenido.trim(), fechaCompleta);
+  res.json({ ok: true, id });
+});
+
 app.post('/api/items/:id/toggle', requiereContrasena, (req, res) => {
   const nuevoEstado = alternarHecho(req.params.id);
   res.json({ ok: nuevoEstado !== null, hecho: nuevoEstado });
@@ -176,6 +186,13 @@ app.post('/api/carpetas', requiereContrasena, (req, res) => {
   if (!nombre || !nombre.trim()) return res.status(400).json({ ok: false, error: 'Falta el nombre' });
   const clave = crearCarpeta(nombre.trim(), emoji || '📁');
   res.json({ ok: true, clave });
+});
+
+app.patch('/api/carpetas/:clave', requiereContrasena, (req, res) => {
+  const { nombre, emoji } = req.body;
+  if (!nombre || !nombre.trim()) return res.status(400).json({ ok: false, error: 'Falta el nombre' });
+  const ok = editarCarpeta(req.params.clave, nombre.trim(), emoji || '📁');
+  res.json({ ok });
 });
 
 app.delete('/api/carpetas/:clave', requiereContrasena, (req, res) => {
@@ -225,6 +242,17 @@ function reprogramarRecordatorios() {
 }
 
 reprogramarRecordatorios();
+
+function fechaDeHoyChile() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+}
+
+cron.schedule('5 0 * * *', () => {
+  const movidos = rodarPendientesVencidos(fechaDeHoyChile());
+  if (movidos > 0) console.log(`${movidos} pendiente(s) vencido(s) movidos a hoy`);
+}, { timezone: 'America/Santiago' });
+
+rodarPendientesVencidos(fechaDeHoyChile());
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
