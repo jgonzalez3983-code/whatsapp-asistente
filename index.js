@@ -77,6 +77,7 @@ async function enviarWhatsApp(mensaje) {
 
 app.post('/whatsapp', async (req, res) => {
   let textoOriginal = (req.body.Body || '').trim();
+  console.log('MENSAJE RECIBIDO:', JSON.stringify(req.body));
   const respuesta = new twilio.twiml.MessagingResponse();
   const numMedia = parseInt(req.body.NumMedia || '0', 10);
   const tipoMedia = req.body.MediaContentType0 || '';
