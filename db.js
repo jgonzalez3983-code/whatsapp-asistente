@@ -73,12 +73,22 @@ function crearCarpeta(nombre, emoji = '📁') {
   return claveFinal;
 }
 
+function editarCarpeta(clave, nombre, emoji) {
+  const info = db.prepare('UPDATE carpetas SET nombre = ?, emoji = ? WHERE clave = ?').run(nombre, emoji, clave);
+  return info.changes > 0;
+}
+
 function eliminarCarpeta(clave) {
   const info = db.prepare('DELETE FROM carpetas WHERE clave = ?').run(clave);
   return info.changes > 0;
 }
 
-function guardarItem(carpeta, contenido) {
+function guardarItem(carpeta, contenido, fecha = null) {
+  if (fecha) {
+    const stmt = db.prepare('INSERT INTO items (carpeta, contenido, creado_en) VALUES (?, ?, ?)');
+    const info = stmt.run(carpeta, contenido, fecha);
+    return info.lastInsertRowid;
+  }
   const stmt = db.prepare('INSERT INTO items (carpeta, contenido) VALUES (?, ?)');
   const info = stmt.run(carpeta, contenido);
   return info.lastInsertRowid;
@@ -114,6 +124,14 @@ function eliminarItem(id) {
   return info.changes > 0;
 }
 
+function rodarPendientesVencidos(hoyStr) {
+  const nuevoTimestamp = `${hoyStr} 09:00:00`;
+  const info = db.prepare(
+    "UPDATE items SET creado_en = ? WHERE hecho = 0 AND substr(creado_en, 1, 10) < ?"
+  ).run(nuevoTimestamp, hoyStr);
+  return info.changes;
+}
+
 function obtenerItem(id) {
   return db.prepare('SELECT * FROM items WHERE id = ?').get(id);
 }
@@ -130,8 +148,8 @@ function setConfig(clave, valor) {
 
 module.exports = {
   db,
-  listarCarpetas, crearCarpeta, eliminarCarpeta, normalizarClave,
+  listarCarpetas, crearCarpeta, editarCarpeta, eliminarCarpeta, normalizarClave,
   guardarItem, listarPendientes, listarTodos,
-  marcarHecho, alternarHecho, eliminarItem, obtenerItem,
+  marcarHecho, alternarHecho, eliminarItem, obtenerItem, rodarPendientesVencidos,
   getConfig, setConfig
 };
