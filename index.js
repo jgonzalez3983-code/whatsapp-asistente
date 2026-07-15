@@ -213,4 +213,18 @@ function reprogramarRecordatorios() {
   const [hM, mM] = getConfig('hora_manana', '08:00').split(':');
   const [hT, mT] = getConfig('hora_tarde', '15:30').split(':');
 
-  tareaManana = cron.schedule(`${mM} ${hM} * * *`,
+  tareaManana = cron.schedule(`${mM} ${hM} * * *`, async () => {
+    const items = listarPendientes();
+    await enviarWhatsApp(`☀️ Buenos días. Tus pendientes:\n\n${formatearLista(items)}`);
+  }, { timezone: 'America/Santiago' });
+
+  tareaTarde = cron.schedule(`${mT} ${hT} * * *`, async () => {
+    const items = listarPendientes();
+    await enviarWhatsApp(`🕒 Recordatorio de media tarde:\n\n${formatearLista(items)}`);
+  }, { timezone: 'America/Santiago' });
+}
+
+reprogramarRecordatorios();
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
