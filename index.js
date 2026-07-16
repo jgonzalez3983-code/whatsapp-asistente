@@ -171,6 +171,10 @@ app.post('/whatsapp', async (req, res) => {
   }
 });
 
+app.get('/privacidad', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacidad.html'));
+});
+
 function requiereContrasena(req, res, next) {
   const auth = { login: 'admin', password: process.env.DASHBOARD_PASSWORD || 'cambiame' };
   const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
