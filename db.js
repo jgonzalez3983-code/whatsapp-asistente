@@ -1,7 +1,9 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'datos.db'));
+const fs = require('fs');
+const carpetaDatos = fs.existsSync('/data') ? '/data' : __dirname;
+const db = new Database(path.join(carpetaDatos, 'datos.db'));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS items (
