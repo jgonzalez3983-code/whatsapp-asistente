@@ -16,11 +16,29 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.json());
 
+// ============ CONFIGURACIÓN DE META (WhatsApp Cloud API) ============
 const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
 const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
 const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'mi-asistente-verificacion';
-const MI_WHATSAPP = process.env.MI_WHATSAPP;
+const MI_WHATSAPP = process.env.MI_WHATSAPP; // formato: 56912345678 (sin + ni espacios)
 const GRAPH_URL = `https://graph.facebook.com/v21.0/${META_PHONE_NUMBER_ID}/messages`;
+
+// Reconoce un número ya sea en dígitos ("3") o dictado por voz ("tres")
+function numeroDesdeTexto(texto) {
+  const matchDigito = texto.match(/\d+/);
+  if (matchDigito) return parseInt(matchDigito[0], 10);
+
+  const PALABRAS = {
+    uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7,
+    ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14,
+    quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20
+  };
+  const textoNorm = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const palabra of Object.keys(PALABRAS)) {
+    if (new RegExp(`\\b${palabra}\\b`).test(textoNorm)) return PALABRAS[palabra];
+  }
+  return null;
+}
 
 function nombreConEmoji(carpetaClave) {
   const carpetas = listarCarpetas();
@@ -39,7 +57,7 @@ function formatearLista(items) {
   let texto = '';
   for (const carpeta of carpetas) {
     if (!porCarpeta[carpeta.clave]) continue;
-    texto += `\n${carpeta.emoji} ${carpeta.nombre}\n`;
+    texto += `\n${carpeta.emoji} *${carpeta.nombre.toUpperCase()}*\n`;
     for (const item of porCarpeta[carpeta.clave]) {
       texto += `  #${item.id} ${item.contenido}\n`;
     }
@@ -47,6 +65,7 @@ function formatearLista(items) {
   return texto.trim();
 }
 
+// Descarga y transcribe una nota de voz usando la API de Meta + Deepgram
 async function transcribirNotaDeVoz(mediaId) {
   const infoMedia = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, {
     headers: { Authorization: `Bearer ${META_ACCESS_TOKEN}` }
@@ -73,6 +92,7 @@ async function transcribirNotaDeVoz(mediaId) {
   return transcript.trim();
 }
 
+// Envía un mensaje de texto por WhatsApp usando la API de Meta
 async function enviarWhatsApp(mensaje, destinatario = MI_WHATSAPP) {
   await axios.post(GRAPH_URL, {
     messaging_product: 'whatsapp',
@@ -87,6 +107,7 @@ async function enviarWhatsApp(mensaje, destinatario = MI_WHATSAPP) {
   });
 }
 
+// ============ VERIFICACIÓN DEL WEBHOOK (Meta la pide al configurar) ============
 app.get('/whatsapp', (req, res) => {
   const modo = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -100,14 +121,16 @@ app.get('/whatsapp', (req, res) => {
   }
 });
 
+// ============ WEBHOOK DE WHATSAPP (mensajes entrantes) ============
 app.post('/whatsapp', async (req, res) => {
+  // Siempre respondemos 200 rápido, Meta no espera una respuesta con contenido
   res.sendStatus(200);
 
   try {
     const entrada = req.body.entry?.[0];
     const cambio = entrada?.changes?.[0];
     const mensaje = cambio?.value?.messages?.[0];
-    if (!mensaje) return;
+    if (!mensaje) return; // puede ser una notificación de "leído", la ignoramos
 
     const remitente = mensaje.from;
     let textoOriginal = '';
@@ -123,7 +146,7 @@ app.post('/whatsapp', async (req, res) => {
         return;
       }
     } else {
-      return;
+      return; // tipo de mensaje no soportado (imagen, sticker, etc.)
     }
 
     const textoLower = textoOriginal.toLowerCase();
@@ -149,6 +172,24 @@ app.post('/whatsapp', async (req, res) => {
       const ok = marcarHecho(id);
       respuesta = ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`;
 
+    } else if (/\b(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(textoLower) && /\b(tarea|pendiente|numero|número|item)\b|\d/.test(textoLower)) {
+      const id = numeroDesdeTexto(textoLower);
+      if (id) {
+        const ok = eliminarItem(id);
+        respuesta = ok ? `🗑️ Eliminado: #${id}` : `No encontré el item #${id}`;
+      } else {
+        respuesta = 'Dime el número así: "borra la tarea 3" o "elimina el 3"';
+      }
+
+    } else if (/\b(lista|listo|hecha|hecho|terminada|terminado|completa|completo|list[oa]?)\b/.test(textoLower) && /\b(tarea|pendiente|numero|número|item)\b|\d/.test(textoLower)) {
+      const id = numeroDesdeTexto(textoLower);
+      if (id) {
+        const ok = marcarHecho(id);
+        respuesta = ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`;
+      } else {
+        respuesta = 'Dime el número así: "tarea 3 lista" o "la 3 ya está hecha"';
+      }
+
     } else if (textoLower.startsWith('crear carpeta ') || textoLower.startsWith('nueva carpeta ') || textoLower.startsWith('créame la carpeta ') || textoLower.startsWith('creame la carpeta ')) {
       const nombre = textoOriginal.replace(/^(crear carpeta|nueva carpeta|créame la carpeta|creame la carpeta)\s*/i, '').trim();
       if (nombre) {
@@ -171,10 +212,12 @@ app.post('/whatsapp', async (req, res) => {
   }
 });
 
+// ============ PÁGINA PÚBLICA DE POLÍTICA DE PRIVACIDAD (requerida por Meta) ============
 app.get('/privacidad', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'privacidad.html'));
 });
 
+// ============ DASHBOARD (protegido con contraseña) ============
 function requiereContrasena(req, res, next) {
   const auth = { login: 'admin', password: process.env.DASHBOARD_PASSWORD || 'cambiame' };
   const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
@@ -253,6 +296,7 @@ app.post('/api/config', requiereContrasena, (req, res) => {
   res.json({ ok: true });
 });
 
+// ============ RECORDATORIOS AUTOMÁTICOS ============
 let tareaManana = null;
 let tareaTarde = null;
 
