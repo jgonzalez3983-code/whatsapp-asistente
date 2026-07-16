@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const twilio = require('twilio');
 const cron = require('node-cron');
 const axios = require('axios');
 const path = require('path');
@@ -17,9 +16,11 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.json());
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+const META_PHONE_NUMBER_ID = process.env.META_PHONE_NUMBER_ID;
+const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'mi-asistente-verificacion';
 const MI_WHATSAPP = process.env.MI_WHATSAPP;
+const GRAPH_URL = `https://graph.facebook.com/v21.0/${META_PHONE_NUMBER_ID}/messages`;
 
 function nombreConEmoji(carpetaClave) {
   const carpetas = listarCarpetas();
@@ -46,13 +47,15 @@ function formatearLista(items) {
   return texto.trim();
 }
 
-async function transcribirNotaDeVoz(mediaUrl) {
-  const audioResponse = await axios.get(mediaUrl, {
+async function transcribirNotaDeVoz(mediaId) {
+  const infoMedia = await axios.get(`https://graph.facebook.com/v21.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${META_ACCESS_TOKEN}` }
+  });
+  const urlAudio = infoMedia.data.url;
+
+  const audioResponse = await axios.get(urlAudio, {
     responseType: 'arraybuffer',
-    auth: {
-      username: process.env.TWILIO_ACCOUNT_SID,
-      password: process.env.TWILIO_AUTH_TOKEN
-    }
+    headers: { Authorization: `Bearer ${META_ACCESS_TOKEN}` }
   });
 
   const dgResponse = await axios.post(
@@ -70,73 +73,102 @@ async function transcribirNotaDeVoz(mediaUrl) {
   return transcript.trim();
 }
 
-async function enviarWhatsApp(mensaje) {
-  await client.messages.create({
-    from: TWILIO_WHATSAPP_FROM,
-    to: MI_WHATSAPP,
-    body: mensaje
+async function enviarWhatsApp(mensaje, destinatario = MI_WHATSAPP) {
+  await axios.post(GRAPH_URL, {
+    messaging_product: 'whatsapp',
+    to: destinatario,
+    type: 'text',
+    text: { body: mensaje }
+  }, {
+    headers: {
+      Authorization: `Bearer ${META_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json'
+    }
   });
 }
 
+app.get('/whatsapp', (req, res) => {
+  const modo = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const desafio = req.query['hub.challenge'];
+
+  if (modo === 'subscribe' && token === META_VERIFY_TOKEN) {
+    console.log('Webhook verificado correctamente');
+    res.status(200).send(desafio);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
 app.post('/whatsapp', async (req, res) => {
-  let textoOriginal = (req.body.Body || '').trim();
-  const respuesta = new twilio.twiml.MessagingResponse();
-  const numMedia = parseInt(req.body.NumMedia || '0', 10);
-  const tipoMedia = req.body.MediaContentType0 || '';
+  res.sendStatus(200);
 
   try {
-    if (numMedia > 0 && tipoMedia.startsWith('audio')) {
-      textoOriginal = await transcribirNotaDeVoz(req.body.MediaUrl0);
+    const entrada = req.body.entry?.[0];
+    const cambio = entrada?.changes?.[0];
+    const mensaje = cambio?.value?.messages?.[0];
+    if (!mensaje) return;
+
+    const remitente = mensaje.from;
+    let textoOriginal = '';
+    let esNotaDeVoz = false;
+
+    if (mensaje.type === 'text') {
+      textoOriginal = (mensaje.text?.body || '').trim();
+    } else if (mensaje.type === 'audio') {
+      esNotaDeVoz = true;
+      textoOriginal = await transcribirNotaDeVoz(mensaje.audio.id);
       if (!textoOriginal) {
-        respuesta.message('No pude entender la nota de voz, intenta de nuevo o escribe el mensaje.');
-        res.type('text/xml').send(respuesta.toString());
+        await enviarWhatsApp('No pude entender la nota de voz, intenta de nuevo o escribe el mensaje.', remitente);
         return;
       }
+    } else {
+      return;
     }
 
     const textoLower = textoOriginal.toLowerCase();
     const carpetasActuales = listarCarpetas();
     const clavesValidas = carpetasActuales.map(c => c.clave);
+    let respuesta = '';
 
     if (textoLower === 'lista' || textoLower === 'pendientes') {
       const items = listarPendientes();
-      respuesta.message(formatearLista(items));
+      respuesta = formatearLista(items);
 
     } else if (textoLower.startsWith('lista ')) {
       const carpeta = textoLower.replace('lista ', '').trim();
       if (clavesValidas.includes(carpeta)) {
         const items = listarPendientes(carpeta);
-        respuesta.message(formatearLista(items));
+        respuesta = formatearLista(items);
       } else {
-        respuesta.message(`Carpeta no reconocida. Usa una de: ${clavesValidas.join(', ')}`);
+        respuesta = `Carpeta no reconocida. Usa una de: ${clavesValidas.join(', ')}`;
       }
 
     } else if (textoLower.startsWith('hecho ')) {
       const id = parseInt(textoLower.replace('hecho ', '').trim(), 10);
       const ok = marcarHecho(id);
-      respuesta.message(ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`);
+      respuesta = ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`;
 
     } else if (textoLower.startsWith('crear carpeta ') || textoLower.startsWith('nueva carpeta ') || textoLower.startsWith('créame la carpeta ') || textoLower.startsWith('creame la carpeta ')) {
       const nombre = textoOriginal.replace(/^(crear carpeta|nueva carpeta|créame la carpeta|creame la carpeta)\s*/i, '').trim();
       if (nombre) {
-        const clave = crearCarpeta(nombre);
-        respuesta.message(`📁 Carpeta creada: "${nombre}". Ya puedes guardar cosas ahí mencionando su nombre.`);
+        crearCarpeta(nombre);
+        respuesta = `📁 Carpeta creada: "${nombre}". Ya puedes guardar cosas ahí mencionando su nombre.`;
       } else {
-        respuesta.message('Dime el nombre así: "crear carpeta jardín"');
+        respuesta = 'Dime el nombre así: "crear carpeta jardín"';
       }
 
     } else if (textoOriginal.length > 0) {
       const { carpeta, contenido } = await clasificarMensaje(textoOriginal);
       const id = guardarItem(carpeta, contenido);
-      const prefijo = numMedia > 0 ? `🎙️ "${textoOriginal}"\n` : '';
-      respuesta.message(`${prefijo}Guardado en ${nombreConEmoji(carpeta)} (#${id})`);
+      const prefijo = esNotaDeVoz ? `🎙️ "${textoOriginal}"\n` : '';
+      respuesta = `${prefijo}Guardado en ${nombreConEmoji(carpeta)} (#${id})`;
     }
-  } catch (err) {
-    console.error('ERROR:', err);
-    respuesta.message('Ocurrió un error procesando tu mensaje.');
-  }
 
-  res.type('text/xml').send(respuesta.toString());
+    if (respuesta) await enviarWhatsApp(respuesta, remitente);
+  } catch (err) {
+    console.error('ERROR procesando mensaje de WhatsApp:', err.response?.data || err.message);
+  }
 });
 
 function requiereContrasena(req, res, next) {
