@@ -169,7 +169,7 @@ app.post('/whatsapp', async (req, res) => {
       return; // tipo de mensaje no soportado (imagen, sticker, etc.)
     }
 
-    const textoLower = textoOriginal.toLowerCase();
+    const textoLower = textoOriginal.toLowerCase().trim().replace(/[.,!?¡¿;:]+$/g, '').trim();
     const carpetasActuales = listarCarpetas();
     const clavesValidas = carpetasActuales.map(c => c.clave);
     let respuesta = '';
