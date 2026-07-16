@@ -192,29 +192,21 @@ app.post('/whatsapp', async (req, res) => {
       const ok = marcarHecho(id);
       respuesta = ok ? `✅ Marcado como hecho: #${id}` : `No encontré el item #${id}`;
 
-    } else if (/\b(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(textoLower) && (/\b(tareas?|pendientes?|numeros?|números?|items?)\b/.test(textoLower) || /\d/.test(textoLower))) {
+    } else if (/\b(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(textoLower) && numerosDesdeTexto(textoLower).length > 0) {
       const ids = numerosDesdeTexto(textoLower);
-      if (ids.length > 0) {
-        const borrados = ids.filter(id => eliminarItem(id));
-        const noEncontrados = ids.filter(id => !borrados.includes(id));
-        let msg = borrados.length > 0 ? `🗑️ Eliminado(s): ${borrados.map(i => '#' + i).join(', ')}` : '';
-        if (noEncontrados.length > 0) msg += `${msg ? '\n' : ''}No encontré: ${noEncontrados.map(i => '#' + i).join(', ')}`;
-        respuesta = msg || 'No encontré esos items.';
-      } else {
-        respuesta = 'Dime el número así: "borra la tarea 3" o "elimina el 3"';
-      }
+      const borrados = ids.filter(id => eliminarItem(id));
+      const noEncontrados = ids.filter(id => !borrados.includes(id));
+      let msg = borrados.length > 0 ? `🗑️ Eliminado(s): ${borrados.map(i => '#' + i).join(', ')}` : '';
+      if (noEncontrados.length > 0) msg += `${msg ? '\n' : ''}No encontré: ${noEncontrados.map(i => '#' + i).join(', ')}`;
+      respuesta = msg || 'No encontré esos items.';
 
-    } else if (/\b(lista|listo|hecha|hecho|terminada|terminado|completa|completo|list[oa]?)\b/.test(textoLower) && (/\b(tareas?|pendientes?|numeros?|números?|items?)\b/.test(textoLower) || /\d/.test(textoLower))) {
+    } else if (/\b(lista|listo|hecha|hecho|terminada|terminado|completa|completo|list[oa]?)\b/.test(textoLower) && numerosDesdeTexto(textoLower).length > 0) {
       const ids = numerosDesdeTexto(textoLower);
-      if (ids.length > 0) {
-        const marcados = ids.filter(id => marcarHecho(id));
-        const noEncontrados = ids.filter(id => !marcados.includes(id));
-        let msg = marcados.length > 0 ? `✅ Marcado(s) como hecho: ${marcados.map(i => '#' + i).join(', ')}` : '';
-        if (noEncontrados.length > 0) msg += `${msg ? '\n' : ''}No encontré: ${noEncontrados.map(i => '#' + i).join(', ')}`;
-        respuesta = msg || 'No encontré esos items.';
-      } else {
-        respuesta = 'Dime el número así: "tarea 3 lista" o "la 3 ya está hecha"';
-      }
+      const marcados = ids.filter(id => marcarHecho(id));
+      const noEncontrados = ids.filter(id => !marcados.includes(id));
+      let msg = marcados.length > 0 ? `✅ Marcado(s) como hecho: ${marcados.map(i => '#' + i).join(', ')}` : '';
+      if (noEncontrados.length > 0) msg += `${msg ? '\n' : ''}No encontré: ${noEncontrados.map(i => '#' + i).join(', ')}`;
+      respuesta = msg || 'No encontré esos items.';
 
     } else if (textoLower.startsWith('crear carpeta ') || textoLower.startsWith('nueva carpeta ') || textoLower.startsWith('créame la carpeta ') || textoLower.startsWith('creame la carpeta ')) {
       const nombre = textoOriginal.replace(/^(crear carpeta|nueva carpeta|créame la carpeta|creame la carpeta)\s*/i, '').trim();
