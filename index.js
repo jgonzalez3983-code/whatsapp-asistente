@@ -7,7 +7,7 @@ const path = require('path');
 
 const {
   listarCarpetas, crearCarpeta, editarCarpeta, eliminarCarpeta,
-  guardarItem, listarPendientes, listarTodos,
+  guardarItem, listarPendientes, listarTodos, listarUsuarios,
   marcarHecho, alternarHecho, eliminarItem, getConfig, setConfig, rodarPendientesVencidos
 } = require('./db');
 const { clasificarMensaje } = require('./clasificador');
@@ -175,13 +175,13 @@ app.post('/whatsapp', async (req, res) => {
     let respuesta = '';
 
     if (textoLower === 'lista' || textoLower === 'pendientes') {
-      const items = listarPendientes();
+      const items = listarPendientes(remitente);
       respuesta = formatearLista(items);
 
     } else if (textoLower.startsWith('lista ')) {
       const carpeta = textoLower.replace('lista ', '').trim();
       if (clavesValidas.includes(carpeta)) {
-        const items = listarPendientes(carpeta);
+        const items = listarPendientes(remitente, carpeta);
         respuesta = formatearLista(items);
       } else {
         respuesta = `Carpeta no reconocida. Usa una de: ${clavesValidas.join(', ')}`;
@@ -219,7 +219,7 @@ app.post('/whatsapp', async (req, res) => {
 
     } else if (textoOriginal.length > 0) {
       const { carpeta, contenido } = await clasificarMensaje(textoOriginal);
-      const id = guardarItem(carpeta, contenido);
+      const id = guardarItem(carpeta, contenido, remitente);
       const prefijo = esNotaDeVoz ? `🎙️ "${textoOriginal}"\n` : '';
       respuesta = `${prefijo}Guardado en ${nombreConEmoji(carpeta)} (#${id})`;
     }
@@ -251,16 +251,20 @@ app.get('/dashboard', requiereContrasena, (req, res) => {
 });
 
 app.get('/api/items', requiereContrasena, (req, res) => {
-  res.json(listarTodos());
+  res.json(listarTodos(req.query.usuario || null));
+});
+
+app.get('/api/usuarios', requiereContrasena, (req, res) => {
+  res.json(listarUsuarios());
 });
 
 app.post('/api/items', requiereContrasena, (req, res) => {
-  const { carpeta, contenido, fecha } = req.body;
+  const { carpeta, contenido, fecha, usuario } = req.body;
   if (!carpeta || !contenido || !contenido.trim()) {
     return res.status(400).json({ ok: false, error: 'Falta carpeta o contenido' });
   }
   const fechaCompleta = fecha ? `${fecha} 12:00:00` : null;
-  const id = guardarItem(carpeta, contenido.trim(), fechaCompleta);
+  const id = guardarItem(carpeta, contenido.trim(), usuario || MI_WHATSAPP, fechaCompleta);
   res.json({ ok: true, id });
 });
 
@@ -329,13 +333,29 @@ function reprogramarRecordatorios() {
   const [hT, mT] = getConfig('hora_tarde', '15:30').split(':');
 
   tareaManana = cron.schedule(`${mM} ${hM} * * *`, async () => {
-    const items = listarPendientes();
-    await enviarWhatsApp(`☀️ Buenos días. Tus pendientes:\n\n${formatearLista(items)}`);
+    for (const usuario of listarUsuarios()) {
+      const items = listarPendientes(usuario);
+      if (items.length > 0) {
+        try {
+          await enviarWhatsApp(`☀️ Buenos días. Tus pendientes:\n\n${formatearLista(items)}`, usuario);
+        } catch (err) {
+          console.error(`Error mandando recordatorio de mañana a ${usuario}:`, err.response?.data || err.message);
+        }
+      }
+    }
   }, { timezone: 'America/Santiago' });
 
   tareaTarde = cron.schedule(`${mT} ${hT} * * *`, async () => {
-    const items = listarPendientes();
-    await enviarWhatsApp(`🕒 Recordatorio de media tarde:\n\n${formatearLista(items)}`);
+    for (const usuario of listarUsuarios()) {
+      const items = listarPendientes(usuario);
+      if (items.length > 0) {
+        try {
+          await enviarWhatsApp(`🕒 Recordatorio de media tarde:\n\n${formatearLista(items)}`, usuario);
+        } catch (err) {
+          console.error(`Error mandando recordatorio de tarde a ${usuario}:`, err.response?.data || err.message);
+        }
+      }
+    }
   }, { timezone: 'America/Santiago' });
 }
 
